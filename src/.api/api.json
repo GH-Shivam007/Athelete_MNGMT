@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "apis": [
+    {
+      "identifier": "triathlon-api",
+      "source": "@triathlon-api/v1#3bsnz25kz4hardc",
+      "integrity": "sha512-pavgANdl0foBf6U5DdZikg0UuVMHrxeB425BoFTgDtPswe80gbJob6a+YELW3B6TESE1iB23dyf0bMEAin17uw==",
+      "installerVersion": "6.1.3"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Activity, TrendingUp, Users, Medal } from 'lucide-react';
+import { triathlonApi } from '../.api/apis/triathlon-api'; // ✅ Correct API for fetching athletes
 import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
 
@@ -10,9 +11,10 @@ interface DashboardStats {
   totalEvents: number;
   recentActivities: any[];
   upcomingEvents: any[];
+  athleteNames: string[];
 }
 
-const StatCard = ({ icon: Icon, label, value, trend }: { icon: any, label: string, value: string | number, trend?: string }) => (
+const StatCard = ({ icon: Icon, label, value }: { icon: any, label: string, value: string | number }) => (
   <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
     <div className="flex items-center justify-between">
       <div>
@@ -21,7 +23,6 @@ const StatCard = ({ icon: Icon, label, value, trend }: { icon: any, label: strin
       </div>
       <Icon className="h-8 w-8 text-blue-500" />
     </div>
-    {trend && <p className="text-sm text-green-500 mt-2">{trend}</p>}
   </div>
 );
 
@@ -32,40 +33,35 @@ const Dashboard = () => {
     averagePerformance: 0,
     totalEvents: 0,
     recentActivities: [],
-    upcomingEvents: []
+    upcomingEvents: [],
+    athleteNames: []
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
+      setLoading(true);
+      setError(null);
+
       try {
         const [
-          athletesResponse,
+          athletesResponse, // ✅ Fetch from the correct API
           trainingPlansResponse,
           performanceResponse,
           eventsResponse
         ] = await Promise.all([
-          supabase
-            .from('athletes')
-            .select('id', { count: 'exact' }),
-          
-          supabase
-            .from('training_plans')
-            .select('id', { count: 'exact' })
-            .eq('status', 'in_progress'),
-          
-          supabase
-            .from('performance_metrics')
-            .select('value'),
-          
-          supabase
-            .from('events')
-            .select('*')
-            .gte('event_date', new Date().toISOString())
-            .order('event_date', { ascending: true })
-            .limit(3)
+          triathlonApi.fetchAthletes(), // ✅ Ensuring correct API call
+          supabase.from('training_plans').select('*').eq('status', 'in_progress'),
+          supabase.from('performance_metrics').select('value'),
+          supabase.from('events').select('*').gte('event_date', new Date().toISOString()).order('event_date', { ascending: true }).limit(3),
         ]);
+
+        console.log("Athletes Response:", athletesResponse); // 🔹 Debugging Output
+
+        if (!athletesResponse || !athletesResponse.data) {
+          throw new Error('Failed to fetch athletes.');
+        }
 
         const performanceValues = performanceResponse.data || [];
         const averagePerformance = performanceValues.length > 0
@@ -73,14 +69,16 @@ const Dashboard = () => {
           : 0;
 
         setStats({
-          totalAthletes: athletesResponse.count || 0,
-          activeTrainingPlans: trainingPlansResponse.count || 0,
+          totalAthletes: athletesResponse.data.length || 0, // ✅ Ensuring correct athlete count
+          activeTrainingPlans: trainingPlansResponse.data?.length || 0,
           averagePerformance: Math.round(averagePerformance * 100) / 100,
-          totalEvents: (eventsResponse.data || []).length,
+          totalEvents: eventsResponse.data?.length || 0,
           recentActivities: performanceValues.slice(0, 3),
-          upcomingEvents: eventsResponse.data || []
+          upcomingEvents: eventsResponse.data || [],
+          athleteNames: athletesResponse.data.map((athlete: any) => athlete.athlete_full_name) || []
         });
       } catch (err) {
+        console.error('Error fetching dashboard data:', err);
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
         setLoading(false);
@@ -97,7 +95,7 @@ const Dashboard = () => {
     <div className="p-6">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-semibold text-gray-800 dark:text-white">Dashboard</h1>
-        <Link
+        <Link 
           to="/athletes"
           className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
         >
@@ -106,72 +104,21 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <StatCard
-          icon={Users}
-          label="Total Athletes"
-          value={stats.totalAthletes}
-        />
-        <StatCard
-          icon={Activity}
-          label="Active Training Plans"
-          value={stats.activeTrainingPlans}
-        />
-        <StatCard
-          icon={TrendingUp}
-          label="Average Performance"
-          value={stats.averagePerformance}
-        />
-        <StatCard
-          icon={Medal}
-          label="Upcoming Events"
-          value={stats.totalEvents}
-        />
+        <StatCard icon={Users} label="Total Athletes" value={stats.totalAthletes} />
+        <StatCard icon={Activity} label="Active Training Plans" value={stats.activeTrainingPlans} />
+        <StatCard icon={TrendingUp} label="Average Performance" value={stats.averagePerformance} />
+        <StatCard icon={Medal} label="Upcoming Events" value={stats.totalEvents} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Recent Activities</h2>
-          <div className="space-y-4">
-            {stats.recentActivities.length > 0 ? (
-              stats.recentActivities.map((activity, index) => (
-                <div key={index} className="flex items-center space-x-4 p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                    <Activity className="h-5 w-5 text-blue-500" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">{activity.metric_type}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Value: {activity.value}</p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-gray-500 dark:text-gray-400">No recent activities</p>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Upcoming Events</h2>
-          <div className="space-y-4">
-            {stats.upcomingEvents.length > 0 ? (
-              stats.upcomingEvents.map((event) => (
-                <div key={event.id} className="flex items-center space-x-4 p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">
-                  <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
-                    <Medal className="h-5 w-5 text-green-500" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900 dark:text-white">{event.title}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {new Date(event.event_date).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-gray-500 dark:text-gray-400">No upcoming events</p>
-            )}
-          </div>
-        </div>
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-8">
+        <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Athlete Names</h2>
+        <ul className="list-disc pl-5 text-gray-900 dark:text-white">
+          {stats.athleteNames.length > 0 ? (
+            stats.athleteNames.map((name, index) => <li key={index}>{name}</li>)
+          ) : (
+            <li>No athletes available</li>
+          )}
+        </ul>
       </div>
     </div>
   );

@@ -1,102 +1,59 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
-import type { InjuryReport, Athlete } from '../../types/database';
-import { AlertTriangle, Plus, Edit2, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, Edit2, Trash2 } from 'lucide-react';
+
+// Static list of athletes
+const athletes = [
+  { id: '1', name: 'Tommaso Fogliatto' },
+  { id: '2', name: 'Pietro Matarazzo' },
+  { id: '3', name: 'Taylor Foster' },
+  { id: '4', name: 'Samantha Valdes Molina' },
+  { id: '5', name: 'Steffi Steinberg' },
+  { id: '6', name: 'Ciat Joyce' },
+  { id: '7', name: 'Victoria Sosa' },
+  { id: '8', name: 'Thyago Alberto Guimarães Santos' },
+  { id: '9', name: 'Paula Ryder' },
+  { id: '10', name: 'Noura Alomairi' }
+];
+
+interface InjuryReport {
+  id: string;
+  athlete_id: string;
+  injury_type: string;
+  severity: string;
+  recovery_status: string;
+  date_reported: string;
+}
 
 export default function InjuryReportList() {
   const [reports, setReports] = useState<InjuryReport[]>([]);
-  const [athletes, setAthletes] = useState<Athlete[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [selectedAthlete, setSelectedAthlete] = useState<string>('');
+  const [selectedAthlete, setSelectedAthlete] = useState<string>(athletes[0].id);
   const [editingReport, setEditingReport] = useState<InjuryReport | null>(null);
 
-  const fetchData = async () => {
-    try {
-      const [reportsResponse, athletesResponse] = await Promise.all([
-        supabase
-          .from('injury_reports')
-          .select('*')
-          .order('date_reported', { ascending: false }),
-        supabase
-          .from('athletes')
-          .select('*')
-      ]);
-
-      if (reportsResponse.error) throw reportsResponse.error;
-      if (athletesResponse.error) throw athletesResponse.error;
-
-      setReports(reportsResponse.data || []);
-      setAthletes(athletesResponse.data || []);
-      if (athletesResponse.data?.length > 0) {
-        setSelectedAthlete(athletesResponse.data[0].id);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
     const formData = new FormData(form);
 
-    try {
-      const reportData = {
-        athlete_id: selectedAthlete,
-        injury_type: formData.get('injury_type'),
-        severity: formData.get('severity'),
-        recovery_status: formData.get('recovery_status'),
-      };
+    const newReport: InjuryReport = {
+      id: `${Date.now()}`, // Temporary ID
+      athlete_id: selectedAthlete,
+      injury_type: formData.get('injury_type') as string,
+      severity: formData.get('severity') as string,
+      recovery_status: formData.get('recovery_status') as string,
+      date_reported: new Date().toISOString()
+    };
 
-      let error;
-      if (editingReport) {
-        ({ error } = await supabase
-          .from('injury_reports')
-          .update(reportData)
-          .eq('id', editingReport.id));
-      } else {
-        ({ error } = await supabase
-          .from('injury_reports')
-          .insert([reportData]));
-      }
+    setReports((prevReports) => [newReport, ...prevReports]);
 
-      if (error) throw error;
-      
-      form.reset();
-      setShowForm(false);
-      setEditingReport(null);
-      fetchData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    }
+    form.reset();
+    setShowForm(false);
+    setEditingReport(null);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this injury report?')) return;
-
-    try {
-      const { error } = await supabase
-        .from('injury_reports')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      fetchData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    }
+  const getAthleteName = (id: string) => {
+    return athletes.find((a) => a.id === id)?.name || 'Unknown';
   };
-
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div className="text-red-600">{error}</div>;
 
   return (
     <div className="space-y-6">
@@ -134,16 +91,16 @@ export default function InjuryReportList() {
           {reports
             .filter((report) => report.athlete_id === selectedAthlete)
             .map((report) => (
-              <div
-                key={report.id}
-                className="border rounded-lg p-4 hover:bg-gray-50"
-              >
+              <div key={report.id} className="border rounded-lg p-4 hover:bg-gray-50">
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="font-medium text-gray-900">{report.injury_type}</h3>
                     <div className="mt-2 flex items-center space-x-4 text-sm">
                       <span className="text-gray-500">
                         Reported: {new Date(report.date_reported).toLocaleDateString()}
+                      </span>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {getAthleteName(report.athlete_id)}
                       </span>
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                         {report.severity}
@@ -164,7 +121,7 @@ export default function InjuryReportList() {
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleDelete(report.id)}
+                      onClick={() => setReports(reports.filter((r) => r.id !== report.id))}
                       className="text-red-600 hover:text-red-800"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -229,24 +186,9 @@ export default function InjuryReportList() {
                 </select>
               </div>
 
-              <div className="flex space-x-4">
-                <button
-                  type="submit"
-                  className="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  {editingReport ? 'Update Report' : 'Add Report'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowForm(false);
-                    setEditingReport(null);
-                  }}
-                  className="flex-1 py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Cancel
-                </button>
-              </div>
+              <button type="submit" className="w-full py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                {editingReport ? 'Update Report' : 'Add Report'}
+              </button>
             </form>
           </div>
         </div>

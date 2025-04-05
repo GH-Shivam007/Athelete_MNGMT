@@ -1,131 +1,66 @@
-import React, { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import type { Athlete } from '../../types/database';
-import AthleteForm from './AthleteForm';
-import { Trash2, Edit, Plus } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { triathlonApi } from "../../.api/apis/triathlon-api"; // ✅ Correct Import Path
+
+interface Athlete {
+  athlete_id: number;
+  athlete_full_name: string;
+  athlete_sport?: string;
+  athlete_country_name: string;
+  athlete_flag: string;
+  athlete_age: number;
+}
 
 export default function AthleteList() {
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [editingAthlete, setEditingAthlete] = useState<Athlete | null>(null);
-
-  const fetchAthletes = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('athletes')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setAthletes(data || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
+    const fetchAthletes = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await triathlonApi.fetchAthletes();
+        if (response?.data) {
+          setAthletes(response.data);
+        } else {
+          throw new Error("No data received");
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to fetch athletes");
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchAthletes();
   }, []);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this athlete?')) return;
-
-    try {
-      const { error } = await supabase
-        .from('athletes')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      setAthletes(athletes.filter(athlete => athlete.id !== id));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    }
-  };
-
-  const handleEdit = (athlete: Athlete) => {
-    setEditingAthlete(athlete);
-    setShowForm(true);
-  };
-
-  const handleFormSuccess = () => {
-    setShowForm(false);
-    setEditingAthlete(null);
-    fetchAthletes();
-  };
-
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div>Loading athletes...</div>;
   if (error) return <div className="text-red-600">{error}</div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Athletes</h2>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Athlete
-        </button>
-      </div>
-
-      {showForm && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
-            <h3 className="text-lg font-medium mb-4">
-              {editingAthlete ? 'Edit Athlete' : 'Add New Athlete'}
-            </h3>
-            <AthleteForm
-              athlete={editingAthlete || undefined}
-              onSuccess={handleFormSuccess}
-            />
-            <button
-              onClick={() => {
-                setShowForm(false);
-                setEditingAthlete(null);
-              }}
-              className="mt-4 w-full py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
+      <h2 className="text-2xl font-bold text-gray-900">Athletes</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {athletes.map((athlete) => (
           <div
-            key={athlete.id}
+            key={athlete.athlete_id}
             className="bg-white p-6 rounded-lg shadow-md space-y-4"
           >
-            <div className="flex justify-between items-start">
+            <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-lg font-medium text-gray-900">{athlete.name}</h3>
-                <p className="text-sm text-gray-500">{athlete.sport}</p>
+                <h3 className="text-lg font-medium text-gray-900">{athlete.athlete_full_name}</h3>
+                <p className="text-sm text-gray-500">{athlete.athlete_sport || "Unknown Sport"}</p>
+                <p className="text-sm text-gray-500">{athlete.athlete_country_name}</p>
               </div>
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => handleEdit(athlete)}
-                  className="text-blue-600 hover:text-blue-800"
-                >
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(athlete.id)}
-                  className="text-red-600 hover:text-red-800"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+              <img
+                src={athlete.athlete_flag}
+                alt={athlete.athlete_country_name}
+                className="w-8 h-5"
+              />
             </div>
-            <p className="text-sm text-gray-600">
-              Born: {new Date(athlete.date_of_birth).toLocaleDateString()}
-            </p>
+            <p className="text-sm text-gray-600">Age: {athlete.athlete_age}</p>
           </div>
         ))}
       </div>

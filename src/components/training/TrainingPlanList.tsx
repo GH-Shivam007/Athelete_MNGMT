@@ -1,104 +1,57 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import React, { useState } from 'react';
 import type { TrainingPlan, Athlete } from '../../types/database';
-import { Calendar, Plus, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Edit2, Trash2 } from 'lucide-react';
 
 export default function TrainingPlanList() {
   const [plans, setPlans] = useState<TrainingPlan[]>([]);
-  const [athletes, setAthletes] = useState<Athlete[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [athletes, setAthletes] = useState<Athlete[]>([
+    { id: '1', name: 'Tommaso Fogliatto' },
+    { id: '2', name: 'Pietro Matarazzo' },
+    { id: '3', name: 'Taylor Foster' },
+    { id: '4', name: 'Samantha Valdes Molina' },
+    { id: '5', name: 'Steffi Steinberg' },
+    { id: '6', name: 'Ciat Joyce' },
+    { id: '7', name: 'Victoria Sosa' },
+    { id: '8', name: 'Thyago Alberto Guimarães Santos' },
+    { id: '9', name: 'Paula Ryder' },
+    { id: '10', name: 'Noura Alomairi' }
+  ]);
+  const [selectedAthlete, setSelectedAthlete] = useState<string>('1');
   const [showForm, setShowForm] = useState(false);
-  const [selectedAthlete, setSelectedAthlete] = useState<string>('');
   const [editingPlan, setEditingPlan] = useState<TrainingPlan | null>(null);
 
-  const fetchData = async () => {
-    try {
-      const [plansResponse, athletesResponse] = await Promise.all([
-        supabase
-          .from('training_plans')
-          .select('*')
-          .order('start_date', { ascending: true }),
-        supabase
-          .from('athletes')
-          .select('*')
-      ]);
-
-      if (plansResponse.error) throw plansResponse.error;
-      if (athletesResponse.error) throw athletesResponse.error;
-
-      setPlans(plansResponse.data || []);
-      setAthletes(athletesResponse.data || []);
-      if (athletesResponse.data?.length > 0) {
-        setSelectedAthlete(athletesResponse.data[0].id);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
     const formData = new FormData(form);
 
-    try {
-      const planData = {
-        athlete_id: selectedAthlete,
-        title: formData.get('title'),
-        description: formData.get('description'),
-        start_date: formData.get('start_date'),
-        end_date: formData.get('end_date'),
-        status: formData.get('status'),
-      };
+    const newPlan: TrainingPlan = {
+      id: Math.random().toString(36).substring(7), // Random ID for local storage
+      athlete_id: selectedAthlete,
+      title: formData.get('title') as string,
+      description: formData.get('description') as string,
+      start_date: formData.get('start_date') as string,
+      end_date: formData.get('end_date') as string,
+      status: formData.get('status') as string,
+    };
 
-      let error;
-      if (editingPlan) {
-        ({ error } = await supabase
-          .from('training_plans')
-          .update(planData)
-          .eq('id', editingPlan.id));
-      } else {
-        ({ error } = await supabase
-          .from('training_plans')
-          .insert([planData]));
-      }
-
-      if (error) throw error;
-      
-      form.reset();
-      setShowForm(false);
-      setEditingPlan(null);
-      fetchData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+    if (editingPlan) {
+      setPlans((prev) =>
+        prev.map((plan) => (plan.id === editingPlan.id ? newPlan : plan))
+      );
+    } else {
+      setPlans((prev) => [...prev, newPlan]);
     }
+
+    form.reset();
+    setShowForm(false);
+    setEditingPlan(null);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!confirm('Are you sure you want to delete this training plan?')) return;
-
-    try {
-      const { error } = await supabase
-        .from('training_plans')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      fetchData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-    }
+    setPlans((prev) => prev.filter((plan) => plan.id !== id));
   };
-
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div className="text-red-600">{error}</div>;
 
   return (
     <div className="space-y-6">
@@ -106,7 +59,7 @@ export default function TrainingPlanList() {
         <h2 className="text-2xl font-bold text-gray-900">Training Plans</h2>
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Plan
@@ -136,40 +89,33 @@ export default function TrainingPlanList() {
           {plans
             .filter((plan) => plan.athlete_id === selectedAthlete)
             .map((plan) => (
-              <div
-                key={plan.id}
-                className="border rounded-lg p-4 hover:bg-gray-50"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-medium text-gray-900">{plan.title}</h3>
-                    <p className="text-sm text-gray-500">{plan.description}</p>
-                    <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
-                      <span>
-                        {new Date(plan.start_date).toLocaleDateString()} - {new Date(plan.end_date).toLocaleDateString()}
-                      </span>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {plan.status}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => {
-                        setEditingPlan(plan);
-                        setShowForm(true);
-                      }}
-                      className="text-blue-600 hover:text-blue-800"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(plan.id)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+              <div key={plan.id} className="border rounded-lg p-4 hover:bg-gray-50">
+                <h3 className="font-medium text-gray-900">{plan.title}</h3>
+                <p className="text-sm text-gray-500">{plan.description}</p>
+                <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
+                  <span>
+                    {new Date(plan.start_date).toLocaleDateString()} - {new Date(plan.end_date).toLocaleDateString()}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {plan.status}
+                  </span>
+                </div>
+                <div className="flex space-x-2 mt-2">
+                  <button
+                    onClick={() => {
+                      setEditingPlan(plan);
+                      setShowForm(true);
+                    }}
+                    className="text-blue-600 hover:text-blue-800"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(plan.id)}
+                    className="text-red-600 hover:text-red-800"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -240,38 +186,11 @@ export default function TrainingPlanList() {
                 </div>
               </div>
 
-              <div>
-                <label htmlFor="status" className="block text-sm font-medium text-gray-700">
-                  Status
-                </label>
-                <select
-                  id="status"
-                  name="status"
-                  defaultValue={editingPlan?.status || 'pending'}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                >
-                  <option value="pending">Pending</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-
               <div className="flex space-x-4">
-                <button
-                  type="submit"
-                  className="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
+                <button type="submit" className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-md">
                   {editingPlan ? 'Update Plan' : 'Add Plan'}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowForm(false);
-                    setEditingPlan(null);
-                  }}
-                  className="flex-1 py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
+                <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2 px-4 bg-gray-200 rounded-md">
                   Cancel
                 </button>
               </div>
